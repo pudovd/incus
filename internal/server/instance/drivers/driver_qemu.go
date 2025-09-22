@@ -3580,7 +3580,9 @@ func (d *qemu) generateQemuConfig(machineDefinition string, cpuType string, cpuI
 	conf = append(conf, qemuConsole()...)
 
 	// VM core info (memory dump).
-	conf = append(conf, qemuCoreInfo()...)
+	if util.IsFalse(d.expandedConfig["security.sev"]) {
+		conf = append(conf, qemuCoreInfo()...)
+	}
 
 	// Setup the bus allocator.
 	bus := qemuNewBus(busName, &conf)
