@@ -684,8 +684,12 @@ func ovnRuleCriteriaToOVNACLRule(s *state.State, direction string, rule *api.Net
 	networkSpecific := false
 	isAllRule := false
 	networkPeersNeeded := make([]cluster.NetworkPeerConnection, 0)
-	portGroupRule := ovn.OVNACLRule{
-		Direction: "to-lport", // Always use this so that outport is available to Match.
+	portGroupRule := ovn.OVNACLRule{}
+	switch direction {
+	case "ingress":
+		portGroupRule.Direction = "to-lport"
+	case "egress":
+		portGroupRule.Direction = "from-lport"
 	}
 
 	// Populate Action and Priority based on rule's Action.
