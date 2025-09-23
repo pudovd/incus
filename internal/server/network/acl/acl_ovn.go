@@ -1291,7 +1291,7 @@ func OVNApplyInstanceNICDefaultRules(client *ovn.NB, switchPortGroup ovn.OVNPort
 
 	rules := []ovn.OVNACLRule{
 		{
-			Direction: "to-lport",
+			Direction: "from-lport",
 			Action:    egressAction,
 			Log:       egressLogged,
 			LogName:   fmt.Sprintf("%s-egress", logPrefix), // Max 63 chars.
