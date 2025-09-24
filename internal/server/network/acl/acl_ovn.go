@@ -1464,13 +1464,15 @@ func addPortGroupDefaultAction(direction string, portGroupName ovn.OVNPortGroup,
 			LogName:   string(portGroupName),
 		})
 	default:
-		return append(portGroupRules, ovn.OVNACLRule{
-			Direction: "to-lport", // Always use this so that outport is available to Match.
-			Action:    defaultAction,
-			Priority:  ovnACLPriorityPortGroupDefaultAction, // Lowest priority to catch only unmatched traffic.
-			Match:     fmt.Sprintf("(inport == @%s || outport == @%s)", portGroupName, portGroupName),
-			Log:       defaultLogged,
-			LogName:   string(portGroupName),
-		})
+		return portGroupRules
+		// do not append breaking egress (from-lport) rules
+// 		return append(portGroupRules, ovn.OVNACLRule{
+// 			Direction: "to-lport", // Always use this so that outport is available to Match.
+// 			Action:    defaultAction,
+// 			Priority:  ovnACLPriorityPortGroupDefaultAction, // Lowest priority to catch only unmatched traffic.
+// 			Match:     fmt.Sprintf("(inport == @%s || outport == @%s)", portGroupName, portGroupName),
+// 			Log:       defaultLogged,
+// 			LogName:   string(portGroupName),
+// 		})
 	}
 }
