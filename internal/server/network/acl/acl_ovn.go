@@ -1427,32 +1427,32 @@ func addPortGroupDefaultAction(direction string, portGroupName ovn.OVNPortGroup,
 	defaultLogged := false
 
 	switch direction {
-    case "ingress":
-        return append(portGroupRules, ovn.OVNACLRule{
-            Direction: "to-lport", // Always use this so that outport is available to Match.
-            Action:    defaultAction,
-            Priority:  ovnACLPriorityPortGroupDefaultAction, // Lowest priority to catch only unmatched traffic.
-            Match:     fmt.Sprintf("outport == @%s", portGroupName),
-            Log:       defaultLogged,
-            LogName:   string(portGroupName),
-        })
-    case "egress":
-        return append(portGroupRules, ovn.OVNACLRule{
-            Direction: "from-lport", // Always use this so that outport is available to Match.
-            Action:    defaultAction,
-            Priority:  ovnACLPriorityPortGroupDefaultAction, // Lowest priority to catch only unmatched traffic.
-            Match:     fmt.Sprintf("inport == @%s", portGroupName),
-            Log:       defaultLogged,
-            LogName:   string(portGroupName),
-        })
-    default:
-        return append(portGroupRules, ovn.OVNACLRule{
-            Direction: "to-lport", // Always use this so that outport is available to Match.
-            Action:    defaultAction,
-            Priority:  ovnACLPriorityPortGroupDefaultAction, // Lowest priority to catch only unmatched traffic.
-            Match:     fmt.Sprintf("(inport == @%s || outport == @%s)", portGroupName, portGroupName),
-            Log:       defaultLogged,
-            LogName:   string(portGroupName),
-        })
+	case "ingress":
+		return append(portGroupRules, ovn.OVNACLRule{
+			Direction: "to-lport", // Always use this so that outport is available to Match.
+			Action:    defaultAction,
+			Priority:  ovnACLPriorityPortGroupDefaultAction, // Lowest priority to catch only unmatched traffic.
+			Match:     fmt.Sprintf("outport == @%s", portGroupName),
+			Log:       defaultLogged,
+			LogName:   string(portGroupName),
+		})
+	case "egress":
+		return append(portGroupRules, ovn.OVNACLRule{
+			Direction: "from-lport", // Always use this so that outport is available to Match.
+			Action:    defaultAction,
+			Priority:  ovnACLPriorityPortGroupDefaultAction, // Lowest priority to catch only unmatched traffic.
+			Match:     fmt.Sprintf("inport == @%s", portGroupName),
+			Log:       defaultLogged,
+			LogName:   string(portGroupName),
+		})
+	default:
+		return append(portGroupRules, ovn.OVNACLRule{
+			Direction: "to-lport", // Always use this so that outport is available to Match.
+			Action:    defaultAction,
+			Priority:  ovnACLPriorityPortGroupDefaultAction, // Lowest priority to catch only unmatched traffic.
+			Match:     fmt.Sprintf("(inport == @%s || outport == @%s)", portGroupName, portGroupName),
+			Log:       defaultLogged,
+			LogName:   string(portGroupName),
+		})
 	}
 }
