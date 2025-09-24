@@ -894,12 +894,8 @@ func ovnRuleSubjectToOVNACLMatch(s *state.State, direction string, aclNameIDs ma
 							return "", false, false, nil, fmt.Errorf("Cannot find security ACL ID for %q", subjectCriterion)
 						}
 
-						switch direction {
-							case "ingress":
-								subjectPortSelector = OVNACLDirectionalPortGroups(aclID).Ingress
-							case "egress":
-								subjectPortSelector = OVNACLDirectionalPortGroups(aclID).Egress
-						}
+						subjectPortSelector = OVNACLDirectionalPortGroups(aclID).All
+						allRule = true
 					}
 				}
 
