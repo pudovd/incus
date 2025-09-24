@@ -1290,24 +1290,6 @@ func OVNApplyInstanceNICDefaultRules(client *ovn.NB, switchPortGroup ovn.OVNPort
 	}
 
 	rules := []ovn.OVNACLRule{
-		// Allow DHCP requests
-		{
-			Direction: "from-lport",
-			Action:    "allow-related",
-			Priority:  ovnACLPriorityNICDefaultActionEgress + 2,
-			Match:     fmt.Sprintf("(inport == @%s) && (udp) && (udp.dst == 67)", portGroupName),
-			Log:       defaultLogged,
-			LogName:   string(portGroupName),
-		},
-		// Allow ARP requests
-		{
-			Direction: "from-lport",
-			Action:    "allow-related",
-			Priority:  ovnACLPriorityNICDefaultActionEgress + 1,
-			Match:     fmt.Sprintf("(inport == @%s) && (arp)", portGroupName),
-			Log:       defaultLogged,
-			LogName:   string(portGroupName),
-		},
 		{
 			Direction: "from-lport",
 			Action:    egressAction,
