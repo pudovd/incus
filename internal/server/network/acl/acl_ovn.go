@@ -1294,19 +1294,19 @@ func OVNApplyInstanceNICDefaultRules(client *ovn.NB, switchPortGroup ovn.OVNPort
 		{
 			Direction: "from-lport",
 			Action:    "allow-related",
+			Log:       egressLogged,
+			LogName:   fmt.Sprintf("%s-egress", logPrefix), // Max 63 chars.
 			Priority:  ovnACLPriorityNICDefaultActionEgress + 2,
-			Match:     fmt.Sprintf("(inport == @%s) && (udp) && (udp.dst == 67)", portGroupName),
-			Log:       defaultLogged,
-			LogName:   string(portGroupName),
+			Match:     fmt.Sprintf(`(inport == "%s") && (udp) && (udp.dst == 67)`, nicPortName), // From NIC.
 		},
 		// Allow ARP requests
 		{
 			Direction: "from-lport",
 			Action:    "allow-related",
+			Log:       egressLogged,
+			LogName:   fmt.Sprintf("%s-egress", logPrefix), // Max 63 chars.
 			Priority:  ovnACLPriorityNICDefaultActionEgress + 1,
-			Match:     fmt.Sprintf("(inport == @%s) && (arp)", portGroupName),
-			Log:       defaultLogged,
-			LogName:   string(portGroupName),
+			Match:     fmt.Sprintf(`(inport == "%s") && (arp)`, nicPortName), // From NIC.
 		},
 		{
 			Direction: "from-lport",
