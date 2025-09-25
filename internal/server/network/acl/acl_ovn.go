@@ -916,13 +916,13 @@ func ovnRuleSubjectToOVNACLMatch(s *state.State, direction string, aclNameIDs ma
 func OVNApplyNetworkBaselineRules(client *ovn.NB, switchName ovn.OVNSwitch, routerPortName ovn.OVNSwitchPort, intRouterIPs []*net.IPNet, dnsIPs []net.IP) error {
 	rules := []ovn.OVNACLRule{
 		{
-			Direction: "to-lport",
+			Direction: "from-lport",
 			Action:    "allow",
 			Priority:  ovnACLPrioritySwitchAllow,
 			Match:     "(arp || nd)", // Neighbour discovery.  // codespell:ignore nd
 		},
 		{
-			Direction: "to-lport",
+			Direction: "from-lport",
 			Action:    "allow",
 			Priority:  ovnACLPrioritySwitchAllow,
 			Match:     fmt.Sprintf(`inport == "%s" && nd_ra`, routerPortName), // IPv6 router adverts from router.
@@ -934,19 +934,19 @@ func OVNApplyNetworkBaselineRules(client *ovn.NB, switchName ovn.OVNSwitch, rout
 			Match:     fmt.Sprintf(`outport == "%s" && nd_rs`, routerPortName), // IPv6 router solicitation to router.
 		},
 		{
-			Direction: "to-lport",
+			Direction: "from-lport",
 			Action:    "allow",
 			Priority:  ovnACLPrioritySwitchAllow,
 			Match:     "icmp6 && icmp6.type == 143 && ip.ttl == 1 && ip6.dst == ff02::16", // IPv6 ICMP Multicast Listener Discovery reports.
 		},
 		{
-			Direction: "to-lport",
+			Direction: "from-lport",
 			Action:    "allow",
 			Priority:  ovnACLPrioritySwitchAllow,
 			Match:     "igmp && ip.ttl == 1 && ip4.mcast", // IPv4 IGMP.
 		},
 		{
-			Direction: "to-lport",
+			Direction: "from-lport",
 			Action:    "allow",
 			Priority:  ovnACLPrioritySwitchAllow,
 			Match:     fmt.Sprintf(`outport == "%s" && ((ip4 && udp.dst == 67) || (ip6 && udp.dst == 547))`, routerPortName), // DHCP to router.
@@ -994,7 +994,7 @@ func OVNApplyNetworkBaselineRules(client *ovn.NB, switchName ovn.OVNSwitch, rout
 				Match:     fmt.Sprintf(`outport == "%s" && icmp%d.type == %d && ip%d.dst == %s`, routerPortName, ipVersion, icmpPingType, ipVersion, intRouterIP.IP),
 			},
 			ovn.OVNACLRule{
-				Direction: "to-lport",
+				Direction: "from-lport",
 				Action:    "allow",
 				Priority:  ovnACLPrioritySwitchAllow,
 				Match:     fmt.Sprintf(`inport == "%s" && icmp%d.type == %d && ip%d.src == %s`, routerPortName, ipVersion, icmpPingReplyType, ipVersion, intRouterIP.IP),
