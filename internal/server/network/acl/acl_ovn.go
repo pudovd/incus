@@ -688,8 +688,15 @@ func ovnRuleCriteriaToOVNACLRule(s *state.State, direction string, rule *api.Net
 	switch direction {
 	case "ingress":
 		portGroupRule.Direction = "to-lport"
+		if reversed {
+			portGroupRule.Direction = "from-lport"
+		}
+
 	case "egress":
 		portGroupRule.Direction = "from-lport"
+		if reversed {
+			portGroupRule.Direction = "to-lport"
+		}
 	}
 
 	// Populate Action and Priority based on rule's Action.
