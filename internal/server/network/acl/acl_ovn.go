@@ -1426,6 +1426,14 @@ func addPortGroupDefaultAction(portGroupName ovn.OVNPortGroup, portGroupRules []
 	defaultAction := "drop"
 	defaultLogged := false
 
+	portGroupRules = append(portGroupRules, ovn.OVNACLRule{
+		Direction: "to-lport", // Always use this so that outport is available to Match.
+		Action:    "allow",
+		Priority:  ovnACLPriorityPortGroupDefaultAction + 1,
+		Match:     fmt.Sprintf("(inport == @%s || outport == @%s) && (arp || nd)", portGroupName, portGroupName),
+		Log:       defaultLogged,
+		LogName:   string(portGroupName),
+	})
 	return append(portGroupRules, ovn.OVNACLRule{
 		Direction: "to-lport", // Always use this so that outport is available to Match.
 		Action:    defaultAction,
