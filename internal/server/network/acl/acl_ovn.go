@@ -1290,6 +1290,24 @@ func OVNApplyInstanceNICDefaultRules(client *ovn.NB, switchPortGroup ovn.OVNPort
 	}
 
 	rules := []ovn.OVNACLRule{
+		// Allow DHCP requests
+		{
+			Direction: "from-lport",
+			Action:    "allow-related",
+			Priority:  ovnACLPriorityNICDefaultActionEgress + 2, // Higher priority than default egress rules
+			Match:     fmt.Sprintf("(inport == @%s) && (udp) && (udp.dst == 67)", nicPortName),
+			Log:       egressLogged,
+			LogName:   fmt.Sprintf("%s-egress", logPrefix), // Max 63 chars.
+		},
+		// Allow ARP requests
+		{
+			Direction: "from-lport",
+			Action:    "allow-related",
+			Priority:  ovnACLPriorityNICDefaultActionEgress + 1, // Higher priority than default egress rules
+			Match:     fmt.Sprintf("(inport == @%s) && (arp)", nicPortName),
+			Log:       egressLogged,
+			LogName:   fmt.Sprintf("%s-egress", logPrefix), // Max 63 chars.
+		},
 		{
 			Direction: "from-lport",
 			Action:    egressAction,
@@ -1437,24 +1455,6 @@ func addPortGroupDefaultAction(direction string, portGroupName ovn.OVNPortGroup,
 			LogName:   string(portGroupName),
 		})
 	case "egress":
-		// Allow DHCP requests
-		portGroupRules = append(portGroupRules, ovn.OVNACLRule{
-			Direction: "from-lport",
-			Action:    "allow-related",
-			Priority:  ovnACLPriorityNICDefaultActionEgress + 2, // Higher priority than default egress rules
-			Match:     fmt.Sprintf("(inport == @%s) && (udp) && (udp.dst == 67)", portGroupName),
-			Log:       defaultLogged,
-			LogName:   string(portGroupName),
-		})
-		// Allow ARP requests
-		portGroupRules = append(portGroupRules, ovn.OVNACLRule{
-			Direction: "from-lport",
-			Action:    "allow-related",
-			Priority:  ovnACLPriorityNICDefaultActionEgress + 1, // Higher priority than default egress rules
-			Match:     fmt.Sprintf("(inport == @%s) && (arp)", portGroupName),
-			Log:       defaultLogged,
-			LogName:   string(portGroupName),
-		})
 		return append(portGroupRules, ovn.OVNACLRule{
 			Direction: "from-lport", // Always use this so that outport is available to Match.
 			Action:    defaultAction,
