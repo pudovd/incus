@@ -48,7 +48,6 @@ const ovnACLPortGroupPrefix = "incus_acl"
 // matching in each direction, including both normal and reversed flows.
 type DirectionalPortGroups struct {
 	Prefix          string
-	All             ovn.OVNPortGroup
 	Ingress         ovn.OVNPortGroup
 	Egress          ovn.OVNPortGroup
 	IngressReversed ovn.OVNPortGroup
@@ -58,7 +57,6 @@ type DirectionalPortGroups struct {
 // PortGroups returns all port group names as a slice.
 func (p *DirectionalPortGroups) PortGroups() []ovn.OVNPortGroup {
 	return []ovn.OVNPortGroup{
-		p.All,
 		p.Ingress,
 		p.IngressReversed,
 		p.Egress,
@@ -143,7 +141,6 @@ func OVNACLDirectionalPortGroups(networkACLID int64) *DirectionalPortGroups {
 
 	return &DirectionalPortGroups{
 		Prefix:          prefix,
-		All:             ovn.OVNPortGroup(fmt.Sprintf("%s_all", prefix)),
 		Ingress:         ovn.OVNPortGroup(fmt.Sprintf("%s_ingress", prefix)),
 		IngressReversed: ovn.OVNPortGroup(fmt.Sprintf("%s_ingress_reversed", prefix)),
 		Egress:          ovn.OVNPortGroup(fmt.Sprintf("%s_egress", prefix)),
@@ -509,7 +506,6 @@ func ovnApplyToPortGroup(s *state.State, l logger.Logger, client *ovn.NB, aclInf
 	egressPGRules := make([]ovn.OVNACLRule, 0)
 	revIngressPGRules := make([]ovn.OVNACLRule, 0)
 	revEgressPGRules := make([]ovn.OVNACLRule, 0)
-	allPGRules := make([]ovn.OVNACLRule, 0)
 	networkRules := make([]ovn.OVNACLRule, 0)
 	networkPeersNeeded := make([]cluster.NetworkPeerConnection, 0)
 	// First gather used address sets
@@ -567,7 +563,7 @@ func ovnApplyToPortGroup(s *state.State, l logger.Logger, client *ovn.NB, aclInf
 			rule.Source = replaceAddressSetNames(rule.Source, addressSetIDs)
 			rule.Destination = replaceAddressSetNames(rule.Destination, addressSetIDs)
 
-			ovnACLRule, isAllRule, networkSpecific, networkPeers, err := ovnRuleCriteriaToOVNACLRule(s, direction, &rule, portGroupName, aclNameIDs, peerTargetNetIDs, reversed)
+			ovnACLRule, networkSpecific, networkPeers, err := ovnRuleCriteriaToOVNACLRule(s, direction, &rule, portGroupName, aclNameIDs, peerTargetNetIDs, reversed)
 			if err != nil {
 				return err
 			}
@@ -579,8 +575,6 @@ func ovnApplyToPortGroup(s *state.State, l logger.Logger, client *ovn.NB, aclInf
 
 			if networkSpecific {
 				networkRules = append(networkRules, ovnACLRule)
-			} else if isAllRule {
-				allPGRules = append(allPGRules, ovnACLRule)
 			} else if direction == "ingress" && !reversed {
 				ingressPGRules = append(ingressPGRules, ovnACLRule)
 			} else if direction == "ingress" && reversed {
@@ -617,7 +611,6 @@ func ovnApplyToPortGroup(s *state.State, l logger.Logger, client *ovn.NB, aclInf
 		return fmt.Errorf("Failed converting ACL %q reverted egress rules for port group %q: %w", aclInfo.Name, directionalPortGroups.EgressReversed, err)
 	}
 
-	allPGRules = addPortGroupDefaultAction(directionalPortGroups.All, allPGRules)
 	ingressPGRules = addPortGroupDefaultAction(directionalPortGroups.Ingress, ingressPGRules)
 	egressPGRules = addPortGroupDefaultAction(directionalPortGroups.Egress, egressPGRules)
 	revIngressPGRules = addPortGroupDefaultAction(directionalPortGroups.IngressReversed, revIngressPGRules)
@@ -633,11 +626,6 @@ func ovnApplyToPortGroup(s *state.State, l logger.Logger, client *ovn.NB, aclInf
 	}
 
 	// Clear all existing ACL rules from port group then add the new rules to the port group.
-	err = client.UpdatePortGroupACLRules(context.TODO(), directionalPortGroups.All, nil, allPGRules...)
-	if err != nil {
-		return fmt.Errorf("Failed applying ACL %q rules to port group %q: %w", aclInfo.Name, directionalPortGroups.All, err)
-	}
-
 	err = client.UpdatePortGroupACLRules(context.TODO(), directionalPortGroups.Ingress, nil, ingressPGRules...)
 	if err != nil {
 		return fmt.Errorf("Failed applying ACL %q rules to port group %q: %w", aclInfo.Name, directionalPortGroups.Ingress, err)
@@ -680,9 +668,8 @@ func ovnApplyToPortGroup(s *state.State, l logger.Logger, client *ovn.NB, aclInf
 
 // ovnRuleCriteriaToOVNACLRule converts an ACL rule into an OVNACLRule for an OVN port group or network.
 // Returns a bool indicating if any of the rule subjects are network specific.
-func ovnRuleCriteriaToOVNACLRule(s *state.State, direction string, rule *api.NetworkACLRule, portGroupName ovn.OVNPortGroup, aclNameIDs map[string]int64, peerTargetNetIDs map[cluster.NetworkPeerConnection]int64, reversed bool) (ovn.OVNACLRule, bool, bool, []cluster.NetworkPeerConnection, error) {
+func ovnRuleCriteriaToOVNACLRule(s *state.State, direction string, rule *api.NetworkACLRule, portGroupName ovn.OVNPortGroup, aclNameIDs map[string]int64, peerTargetNetIDs map[cluster.NetworkPeerConnection]int64, reversed bool) (ovn.OVNACLRule, bool, []cluster.NetworkPeerConnection, error) {
 	networkSpecific := false
-	isAllRule := false
 	networkPeersNeeded := make([]cluster.NetworkPeerConnection, 0)
 	portGroupRule := ovn.OVNACLRule{
 		Direction: "to-lport", // Always use this so that outport is available to Match.
@@ -718,17 +705,13 @@ func ovnRuleCriteriaToOVNACLRule(s *state.State, direction string, rule *api.Net
 
 	// Add subject filters.
 	if rule.Source != "" {
-		match, allRule, netSpecificMatch, networkPeers, err := ovnRuleSubjectToOVNACLMatch(s, "src", aclNameIDs, peerTargetNetIDs, util.SplitNTrimSpace(rule.Source, ",", -1, false)...)
+		match, netSpecificMatch, networkPeers, err := ovnRuleSubjectToOVNACLMatch(s, "src", aclNameIDs, peerTargetNetIDs, util.SplitNTrimSpace(rule.Source, ",", -1, false)...)
 		if err != nil {
-			return ovn.OVNACLRule{}, false, false, nil, err
+			return ovn.OVNACLRule{}, false, nil, err
 		}
 
 		if netSpecificMatch {
 			networkSpecific = true
-		}
-
-		if allRule {
-			isAllRule = true
 		}
 
 		matchParts = append(matchParts, match)
@@ -736,17 +719,13 @@ func ovnRuleCriteriaToOVNACLRule(s *state.State, direction string, rule *api.Net
 	}
 
 	if rule.Destination != "" {
-		match, allRule, netSpecificMatch, networkPeers, err := ovnRuleSubjectToOVNACLMatch(s, "dst", aclNameIDs, peerTargetNetIDs, util.SplitNTrimSpace(rule.Destination, ",", -1, false)...)
+		match, netSpecificMatch, networkPeers, err := ovnRuleSubjectToOVNACLMatch(s, "dst", aclNameIDs, peerTargetNetIDs, util.SplitNTrimSpace(rule.Destination, ",", -1, false)...)
 		if err != nil {
-			return ovn.OVNACLRule{}, false, false, nil, err
+			return ovn.OVNACLRule{}, false, nil, err
 		}
 
 		if netSpecificMatch {
 			networkSpecific = true
-		}
-
-		if allRule {
-			isAllRule = true
 		}
 
 		matchParts = append(matchParts, match)
@@ -779,7 +758,7 @@ func ovnRuleCriteriaToOVNACLRule(s *state.State, direction string, rule *api.Net
 	// Populate the Match field with the generated match parts.
 	portGroupRule.Match = fmt.Sprintf("(%s)", strings.Join(matchParts, ") && ("))
 
-	return portGroupRule, isAllRule, networkSpecific, networkPeersNeeded, nil
+	return portGroupRule, networkSpecific, networkPeersNeeded, nil
 }
 
 // ovnRulePortToOVNACLMatch converts protocol (tcp/udp), direction (src/dst) and port criteria list into an OVN
@@ -801,10 +780,9 @@ func ovnRulePortToOVNACLMatch(protocol string, direction string, portCriteria ..
 
 // ovnRuleSubjectToOVNACLMatch converts direction (src/dst) and subject criteria list into an OVN match statement.
 // Returns a bool indicating if any of the subjects are network specific.
-func ovnRuleSubjectToOVNACLMatch(s *state.State, direction string, aclNameIDs map[string]int64, peerTargetNetIDs map[cluster.NetworkPeerConnection]int64, subjectCriteria ...string) (string, bool, bool, []cluster.NetworkPeerConnection, error) {
+func ovnRuleSubjectToOVNACLMatch(s *state.State, direction string, aclNameIDs map[string]int64, peerTargetNetIDs map[cluster.NetworkPeerConnection]int64, subjectCriteria ...string) (string, bool, []cluster.NetworkPeerConnection, error) {
 	fieldParts := make([]string, 0, len(subjectCriteria))
 	networkSpecific := false
-	allRule := false
 	networkPeersNeeded := make([]cluster.NetworkPeerConnection, 0)
 
 	// For each criterion check if value looks like an IP range or IP CIDR, and if not use it as an ACL name.
@@ -822,7 +800,7 @@ func ovnRuleSubjectToOVNACLMatch(s *state.State, direction string, aclNameIDs ma
 					fieldParts = append(fieldParts, fmt.Sprintf("(%s.%s >= %s && %s.%s <= %s)", protocol, direction, criterionParts[0], protocol, direction, criterionParts[1]))
 				}
 			} else {
-				return "", false, false, nil, fmt.Errorf("Invalid IP range %q", subjectCriterion)
+				return "", false, nil, fmt.Errorf("Invalid IP range %q", subjectCriterion)
 			}
 		} else {
 			// Try parsing subject as single IP or CIDR.
@@ -864,7 +842,7 @@ func ovnRuleSubjectToOVNACLMatch(s *state.State, direction string, aclNameIDs ma
 						// Subject is a network peer name. Convert to address set criteria.
 						peerParts := strings.SplitN(after, "/", 2)
 						if len(peerParts) != 2 {
-							return "", false, false, nil, fmt.Errorf("Cannot parse subject as peer %q", subjectCriterion)
+							return "", false, nil, fmt.Errorf("Cannot parse subject as peer %q", subjectCriterion)
 						}
 
 						peer := cluster.NetworkPeerConnection{
@@ -874,7 +852,7 @@ func ovnRuleSubjectToOVNACLMatch(s *state.State, direction string, aclNameIDs ma
 
 						networkID, found := peerTargetNetIDs[peer]
 						if !found {
-							return "", false, false, nil, fmt.Errorf("Cannot find network ID for peer %q", subjectCriterion)
+							return "", false, nil, fmt.Errorf("Cannot find network ID for peer %q", subjectCriterion)
 						}
 
 						addrSetPrefix := OVNIntSwitchPortGroupAddressSetPrefix(networkID)
@@ -887,11 +865,25 @@ func ovnRuleSubjectToOVNACLMatch(s *state.State, direction string, aclNameIDs ma
 						// Assume the bare name is an ACL name and convert to port group.
 						aclID, found := aclNameIDs[subjectCriterion]
 						if !found {
-							return "", false, false, nil, fmt.Errorf("Cannot find security ACL ID for %q", subjectCriterion)
+							return "", false, nil, fmt.Errorf("Cannot find security ACL ID for %q", subjectCriterion)
 						}
 
-						subjectPortSelector = OVNACLDirectionalPortGroups(aclID).All
-						allRule = true
+						portType := "inport"
+						if direction == "dst" {
+							portType = "outport"
+						}
+
+						dPortGroups := OVNACLDirectionalPortGroups(aclID)
+						groups := dPortGroups.PortGroups()
+
+						conds := make([]string, 0, len(groups))
+						for _, g := range groups {
+							conds = append(conds, fmt.Sprintf("%s == @%s", portType, g))
+						}
+
+						fieldParts = append(fieldParts, strings.Join(conds, " || "))
+
+						continue
 					}
 				}
 
@@ -905,7 +897,7 @@ func ovnRuleSubjectToOVNACLMatch(s *state.State, direction string, aclNameIDs ma
 		}
 	}
 
-	return strings.Join(fieldParts, " || "), allRule, networkSpecific, networkPeersNeeded, nil
+	return strings.Join(fieldParts, " || "), networkSpecific, networkPeersNeeded, nil
 }
 
 // OVNApplyNetworkBaselineRules applies preset baseline logical switch rules to a allow access to network services.
